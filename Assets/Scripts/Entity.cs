@@ -35,6 +35,11 @@ public class Entity : MonoBehaviour
         return transform.position;
     }
 
+    public Quaternion GetRotation()
+    {
+        return transform.rotation;
+    }
+
     public Rigidbody GetRigidbody()
     {
         return m_Rigidbody;

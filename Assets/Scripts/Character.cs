@@ -22,6 +22,7 @@ public class CharacterParameters
     // Movement
     [Header("Movement")]
     public float runVelocity = 500f;
+    public float rotationSpeed = 15f;
 
     // Dash
     [Header("Dash")]
@@ -212,16 +213,27 @@ public class Character : Entity
     // Move
     protected void Move(Vector3 direction, float velocity)
     {
-        if (!m_IsStun)
+        if (m_AimingInput != Vector3.zero)
         {
             GetRigidbody().velocity = direction * velocity * Time.fixedDeltaTime;
+        }
+        else if (!m_IsStun && m_MovementInput != Vector3.zero)
+        {
+            GetRigidbody().velocity = transform.forward * velocity * Time.fixedDeltaTime;
+        }
+        else
+        {
+            GetRigidbody().velocity = Vector3.zero;
         }
     }
 
     // Rotation
-    protected void RotateCharacter(Vector3 rotation)
+    protected void RotateCharacter(Vector3 targetDirection)
     {
-        GetRigidbody().MoveRotation(Quaternion.LookRotation(rotation));
+        Quaternion targetRotation = Quaternion.LookRotation(targetDirection);
+        Quaternion newRotation = Quaternion.Slerp(GetRotation(), targetRotation, Time.deltaTime * m_Parameters.rotationSpeed);
+
+        GetRigidbody().MoveRotation(newRotation);
     }
 
     // Ball related
