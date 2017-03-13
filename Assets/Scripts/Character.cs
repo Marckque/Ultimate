@@ -1,4 +1,5 @@
 ﻿using UnityEngine;
+using UnityEngine.UI;
 using System.Collections;
 
 [System.Serializable]
@@ -20,20 +21,31 @@ public class CharacterParameters
 {
     // Movement
     [Header("Movement")]
-    public float runVelocity;
+    public float runVelocity = 500f;
 
     // Dash
     [Header("Dash")]
-    public float dashVelocity;
-    public float dashDuration;
-    public float dashStun;
+    public float dashVelocity = 1000f;
+    public float dashDuration = 0.1f;
+    public float dashStun = 0.025f;
 
-    // Throw
-    [Header("Throw")]
-    public float throwForce;
-    public float throwOffset;
+    // Ball
+    [Header("Ball")]
+    public float throwForce = 5f;
+    public float throwOffset = 2f;
     [Tooltip("Percentage of velocity magnitude pre-ball catch that will be applied to the next throw"), Range(-100f, 100f)]
     public float throwPreviousVelocityPercentage;
+    public float maximumBallPossession = 3f;
+}
+
+[System.Serializable]
+public class CharacterUI
+{
+    [Header("UI")]
+    public Transform UI;
+
+    [Header("Ball")]
+    public Image possessionBallImage;
 }
 
 public class Character : Entity
@@ -43,24 +55,29 @@ public class Character : Entity
     private CharacterParameters m_Parameters = new CharacterParameters();
     [SerializeField]
     private CharacterControls m_Controls = new CharacterControls();
+    [SerializeField]
+    private CharacterUI m_CharacterUI = new CharacterUI();
 
-    // Ball related
-    private Ball m_Ball;
+    // Other
+    private bool m_LastStickUsed;
 
     // Movement
     private Vector3 m_MovementInput;
+    private Vector3 m_LastMovementInput;
     private float m_PreviousVelocityMagnitude;
 
     // Dash
     private bool m_HasReleasedActionButton = true;
     private bool m_IsDashing;
-    private Vector3 m_LastMovementInput;
 
     // Stun 
     private bool m_IsStun;
 
-    // Throw
+    // Ball related
+    private Ball m_Ball;
+    private float m_CatchTime;
     private Vector3 m_AimingInput;
+    private Vector3 m_LastAimingInput;
     #endregion Variables
 
     protected void Update()
@@ -100,6 +117,17 @@ public class Character : Entity
                 m_HasReleasedActionButton = true;
             }
         }
+
+        if (m_Ball)
+        {
+            direction = m_LastStickUsed == true ? m_LastAimingInput : m_LastMovementInput;
+            m_Ball.transform.position = transform.position + direction * m_Parameters.throwOffset;
+
+            if (Time.time > m_CatchTime + m_Parameters.maximumBallPossession)
+            {
+                ThrowBall();
+            }
+        }
 	}
 
     protected void MovementInput()
@@ -109,12 +137,19 @@ public class Character : Entity
         if (m_MovementInput.magnitude > 0.3f && !m_IsDashing)
         {
             m_LastMovementInput = m_MovementInput;
+            m_LastStickUsed = false;
         }
     }
 
     protected void AimInput()
     {
         m_AimingInput = new Vector3(Input.GetAxis(m_Controls.horizontalAim + m_Controls.characterID), 0f, -Input.GetAxis(m_Controls.verticalAim + m_Controls.characterID)).normalized;
+
+        if (m_AimingInput.magnitude > 0.3f)
+        {
+            m_LastAimingInput = m_AimingInput;
+            m_LastStickUsed = true;
+        }
     }
 
     protected void FixedUpdate()
@@ -193,11 +228,42 @@ public class Character : Entity
     private void CatchBall(Ball ball)
     {
         m_Ball = ball;
-        m_Ball.Deactivate();
+
+        StartCoroutine(BallPossession());
+        
+        m_Ball.DeactivateCollider();
 
         m_PreviousVelocityMagnitude = GetRigidbody().velocity.magnitude;
 
         m_IsStun = true;
+    }
+
+    private IEnumerator BallPossession()
+    {
+        m_CatchTime = Time.time;
+        float time = 0f;
+        float fill = 0f;
+
+        m_CharacterUI.possessionBallImage.enabled = true;
+        m_CharacterUI.possessionBallImage.fillAmount = 0f;
+        m_CharacterUI.UI.transform.position = transform.position + Vector3.up;
+
+        while (time < m_Parameters.maximumBallPossession)
+        {
+            if (!m_Ball)
+            {
+                m_CharacterUI.possessionBallImage.enabled = false;
+                yield break;
+            }
+
+            time += Time.deltaTime;
+            fill = ExtensionMethods.Remap(time, 0f, m_Parameters.maximumBallPossession, 0f, 1f);
+            m_CharacterUI.possessionBallImage.fillAmount = fill;
+
+            yield return new WaitForEndOfFrame();
+        }
+
+        m_CharacterUI.possessionBallImage.enabled = false;
     }
 
     private void ThrowBall()

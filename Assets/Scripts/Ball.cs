@@ -2,12 +2,25 @@
 
 public class Ball : Entity
 {
+    [SerializeField]
+    private CapsuleCollider m_CapsuleCollider;
+
     public void Throw(Vector3 from, Vector3 towards)
     {
         transform.position = from;
         GetRigidbody().velocity = towards;
 
-        Activate();
+        ActivateCollider();
+    }
+
+    public void ActivateCollider()
+    {
+        m_CapsuleCollider.enabled = true;
+    }
+
+    public void DeactivateCollider()
+    {
+        m_CapsuleCollider.enabled = false;
     }
 
     protected void OnDrawGizmosSelected()
