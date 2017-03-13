@@ -12,8 +12,7 @@ public class CharacterControls
     public string verticalMove = "L_YAxis_";
     public string horizontalAim = "R_XAxis_";
     public string verticalAim = "R_YAxis_";
-    public string dash = "RT_";
-    public string throwBall = "LT_";
+    public string action = "TriggersR_";
 }
 
 [System.Serializable]
@@ -33,6 +32,8 @@ public class CharacterParameters
     [Header("Throw")]
     public float throwForce;
     public float throwOffset;
+    [Tooltip("Percentage of velocity magnitude pre-ball catch that will be applied to the next throw"), Range(-100f, 100f)]
+    public float throwPreviousVelocityPercentage;
 }
 
 public class Character : Entity
@@ -48,8 +49,10 @@ public class Character : Entity
 
     // Movement
     private Vector3 m_MovementInput;
+    private float m_PreviousVelocityMagnitude;
 
     // Dash
+    private bool m_HasReleasedActionButton = true;
     private bool m_IsDashing;
     private Vector3 m_LastMovementInput;
 
@@ -62,30 +65,57 @@ public class Character : Entity
 
     protected void Update()
     {
-        m_MovementInput = new Vector3(Input.GetAxis(m_Controls.horizontalMove + m_Controls.characterID), 0f, Input.GetAxis(m_Controls.verticalMove + m_Controls.characterID)).normalized;
-        m_AimingInput = new Vector3(Input.GetAxis(m_Controls.horizontalAim + m_Controls.characterID), 0f, -Input.GetAxis(m_Controls.verticalAim + m_Controls.characterID)).normalized;
+        // Move and aim input
+        MovementInput();
+        AimInput();
 
-        Debug.DrawRay(GetPosition(), m_MovementInput, Color.green, 0.05f);
-        Debug.DrawRay(GetPosition(), m_AimingInput, Color.cyan, 0.05f);
+        // Rotate
+        Vector3 direction = m_AimingInput != Vector3.zero ? m_AimingInput : m_MovementInput;
+        if (direction.magnitude > 0.8f)
+        {
+            RotateCharacter(direction);
+        }
+
+        // Shoot and dash input
+        if (Input.GetAxisRaw(m_Controls.action + m_Controls.characterID) > 0f)
+        {
+            if (m_HasReleasedActionButton)
+            {
+                m_HasReleasedActionButton = false;
+
+                if (!m_IsStun)
+                {
+                    StartCoroutine(Dash());
+                }
+                else
+                {
+                    ThrowBall();
+                }
+            }            
+        }
+        else
+        {
+            if (!m_IsDashing)
+            {
+                m_HasReleasedActionButton = true;
+            }
+        }
+	}
+
+    protected void MovementInput()
+    {
+        m_MovementInput = new Vector3(Input.GetAxis(m_Controls.horizontalMove + m_Controls.characterID), 0f, Input.GetAxis(m_Controls.verticalMove + m_Controls.characterID)).normalized;
 
         if (m_MovementInput.magnitude > 0.3f && !m_IsDashing)
         {
             m_LastMovementInput = m_MovementInput;
         }
+    }
 
-        if (Input.GetButtonDown(m_Controls.throwBall + m_Controls.characterID))
-        {
-            ThrowBall();
-        } 
-
-        if (Input.GetButtonDown(m_Controls.dash + m_Controls.characterID))
-        {
-            if (!m_IsDashing)
-            {
-                StartCoroutine(Dash());
-            }
-        }
-	}
+    protected void AimInput()
+    {
+        m_AimingInput = new Vector3(Input.GetAxis(m_Controls.horizontalAim + m_Controls.characterID), 0f, -Input.GetAxis(m_Controls.verticalAim + m_Controls.characterID)).normalized;
+    }
 
     protected void FixedUpdate()
     {
@@ -93,7 +123,14 @@ public class Character : Entity
         {
             if (m_IsDashing)
             {
-                Move(m_LastMovementInput, m_Parameters.dashVelocity);
+                if (m_AimingInput != Vector3.zero && m_MovementInput == Vector3.zero)
+                {
+                    Move(m_AimingInput, m_Parameters.dashVelocity);
+                }
+                else
+                {
+                    Move(m_LastMovementInput, m_Parameters.dashVelocity);
+                }
             }
             else
             {
@@ -140,7 +177,16 @@ public class Character : Entity
     // Move
     protected void Move(Vector3 direction, float velocity)
     {
-        GetRigidbody().velocity = direction * velocity * Time.fixedDeltaTime;
+        if (!m_IsStun)
+        {
+            GetRigidbody().velocity = direction * velocity * Time.fixedDeltaTime;
+        }
+    }
+
+    // Rotation
+    protected void RotateCharacter(Vector3 rotation)
+    {
+        GetRigidbody().MoveRotation(Quaternion.LookRotation(rotation));
     }
 
     // Ball related
@@ -148,16 +194,26 @@ public class Character : Entity
     {
         m_Ball = ball;
         m_Ball.Deactivate();
+
+        m_PreviousVelocityMagnitude = GetRigidbody().velocity.magnitude;
+
+        m_IsStun = true;
     }
 
     private void ThrowBall()
     {
-        Vector3 direction = m_AimingInput != Vector3.zero ? m_AimingInput : m_MovementInput;
-
         if (m_Ball)
         {
-            m_Ball.Throw(GetPosition() + (direction * m_Parameters.throwOffset), direction * m_Parameters.throwForce);
+            m_Ball.Throw(GetPosition() + (DirectionToConsider() * m_Parameters.throwOffset), // from 
+                DirectionToConsider() * (m_Parameters.throwForce + (m_PreviousVelocityMagnitude * (1 + (m_Parameters.throwPreviousVelocityPercentage * 0.01f))))); // towards
             m_Ball = null;
+
+            m_IsStun = false;
         }
+    }
+
+    private Vector3 DirectionToConsider()
+    {
+        return m_AimingInput != Vector3.zero ? m_AimingInput : m_MovementInput;
     }
 }
