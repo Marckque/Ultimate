@@ -2,6 +2,8 @@
 
 public class Goal : MonoBehaviour
 {
+    [SerializeField]
+    private Transform m_OtherSpawn;
     private int m_GoalID = 0;
     private int m_GoalValue = 1;
 
@@ -34,10 +36,7 @@ public class Goal : MonoBehaviour
         if (ball)
         {
             Score();
-
-            // Reset ball
-            ball.GetRigidbody().velocity = Vector3.zero;
-            ball.transform.position = Vector3.up * 2f;
+            ball.ResetBall(m_OtherSpawn.position);
         }
     }
 }

@@ -4,6 +4,8 @@ public class Ball : Entity
 {
     [SerializeField]
     private CapsuleCollider m_CapsuleCollider;
+    [SerializeField]
+    private TrailRenderer m_TrailRenderer;
 
     public void Throw(Vector3 from, Vector3 towards)
     {
@@ -11,6 +13,18 @@ public class Ball : Entity
         GetRigidbody().velocity = towards;
 
         ActivateCollider();
+        ActivateTrailRenderer();
+    }
+
+    public void ResetBall(Vector3 spawn)
+    {
+        ClearTrailRenderer();
+        DeactivateTrailRenderer();
+
+        GetRigidbody().velocity = Vector3.zero;
+        transform.position = spawn + Vector3.up * 2f;
+
+        ActivateTrailRenderer();
     }
 
     public void ActivateCollider()
@@ -21,6 +35,21 @@ public class Ball : Entity
     public void DeactivateCollider()
     {
         m_CapsuleCollider.enabled = false;
+    }
+
+    public void ClearTrailRenderer()
+    {
+        m_TrailRenderer.Clear();
+    }
+    
+    public void ActivateTrailRenderer()
+    {
+        m_TrailRenderer.enabled = true;
+    }
+
+    public void DeactivateTrailRenderer()
+    {
+        m_TrailRenderer.enabled = false;
     }
 
     protected void OnDrawGizmosSelected()

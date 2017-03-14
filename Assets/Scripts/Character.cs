@@ -129,7 +129,7 @@ public class Character : Entity
                 ThrowBall();
             }
         }
-	}
+    }
 
     protected void MovementInput()
     {
@@ -241,6 +241,10 @@ public class Character : Entity
     {
         m_Ball = ball;
 
+        // Trail 
+        m_Ball.ClearTrailRenderer();
+        m_Ball.DeactivateTrailRenderer();
+
         StartCoroutine(BallPossession());
         
         m_Ball.DeactivateCollider();
@@ -284,8 +288,8 @@ public class Character : Entity
         {
             m_Ball.Throw(GetPosition() + (DirectionToConsider() * m_Parameters.throwOffset), // from 
                 DirectionToConsider() * (m_Parameters.throwForce + (m_PreviousVelocityMagnitude * (1 + (m_Parameters.throwPreviousVelocityPercentage * 0.01f))))); // towards
-            m_Ball = null;
 
+            m_Ball = null;
             m_IsStun = false;
         }
     }
