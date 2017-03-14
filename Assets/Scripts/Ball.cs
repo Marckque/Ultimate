@@ -20,11 +20,16 @@ public class Ball : Entity
     {
         ClearTrailRenderer();
         DeactivateTrailRenderer();
+        ResetBallVelocity();
 
-        GetRigidbody().velocity = Vector3.zero;
-        transform.position = spawn + Vector3.up * 2f;
+        transform.position = spawn + Vector3.up;
 
         ActivateTrailRenderer();
+    }
+
+    public void ResetBallVelocity()
+    {
+        GetRigidbody().velocity = Vector3.zero;
     }
 
     public void ActivateCollider()

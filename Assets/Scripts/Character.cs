@@ -14,6 +14,7 @@ public class CharacterControls
     public string horizontalAim = "R_XAxis_";
     public string verticalAim = "R_YAxis_";
     public string action = "TriggersR_";
+    public string fakeAction = "TriggersL_";
 }
 
 [System.Serializable]
@@ -33,7 +34,10 @@ public class CharacterParameters
     // Ball
     [Header("Ball")]
     public float throwForce = 5f;
+    [Tooltip("Time (in seconds) the player will be stunned after a throw"), Range(0f, 1f)]
+    public float throwStun = 0.1f;
     public float throwOffset = 2f;
+    public float fakeThrowDistance = 2f;
     [Tooltip("Percentage of velocity magnitude pre-ball catch that will be applied to the next throw"), Range(-100f, 100f)]
     public float throwPreviousVelocityPercentage;
     public float maximumBallPossession = 3f;
@@ -61,6 +65,8 @@ public class Character : Entity
 
     // Other
     private bool m_LastStickUsed;
+    private bool m_ActionIsAvailable = true;
+    private bool m_FakeActionIsAvailable = true;
 
     // Movement
     private Vector3 m_MovementInput;
@@ -68,7 +74,6 @@ public class Character : Entity
     private float m_PreviousVelocityMagnitude;
 
     // Dash
-    private bool m_HasReleasedActionButton = true;
     private bool m_IsDashing;
 
     // Stun 
@@ -79,35 +84,36 @@ public class Character : Entity
     private float m_CatchTime;
     private Vector3 m_AimingInput;
     private Vector3 m_LastAimingInput;
+    private bool m_FakeActionIsEngaged;
     #endregion Variables
 
     protected void Update()
     {
-        // Move and aim input
+        // Move and aim inputs
         MovementInput();
         AimInput();
 
-        // Rotate
+        // Rotate the character
         Vector3 direction = m_AimingInput != Vector3.zero ? m_AimingInput : m_MovementInput;
         if (direction.magnitude > 0.8f)
         {
             RotateCharacter(direction);
         }
 
-        // Shoot and dash input
+        // Shoot and dash inputs
         if (Input.GetAxisRaw(m_Controls.action + m_Controls.characterID) > 0f)
         {
-            if (m_HasReleasedActionButton)
+            if (m_ActionIsAvailable)
             {
-                m_HasReleasedActionButton = false;
+                m_ActionIsAvailable = false;
 
-                if (!m_IsStun)
+                if (!m_IsStun && !m_IsDashing)
                 {
                     StartCoroutine(Dash());
                 }
                 else
                 {
-                    ThrowBall();
+                    ThrowBall(true);
                 }
             }            
         }
@@ -115,18 +121,41 @@ public class Character : Entity
         {
             if (!m_IsDashing)
             {
-                m_HasReleasedActionButton = true;
+                m_ActionIsAvailable = true;
             }
         }
 
-        if (m_Ball)
+        if (m_Ball && m_FakeActionIsEngaged)
+        {
+            if ((GetPosition() - m_Ball.GetPosition()).magnitude > m_Parameters.fakeThrowDistance)
+            {
+                m_FakeActionIsEngaged = false;
+                m_Ball.ResetBallVelocity();
+                m_Ball.ClearTrailRenderer();
+            }
+        }
+
+        if (m_Ball && !m_FakeActionIsEngaged)
         {
             direction = m_LastStickUsed == true ? m_LastAimingInput : m_LastMovementInput;
             m_Ball.transform.position = transform.position + direction * m_Parameters.throwOffset;
 
             if (Time.time > m_CatchTime + m_Parameters.maximumBallPossession)
             {
-                ThrowBall();
+                ThrowBall(true);
+            }
+
+            if (Input.GetAxisRaw(m_Controls.fakeAction + m_Controls.characterID) > 0f)
+            {
+                if (m_FakeActionIsAvailable)
+                {
+                    m_FakeActionIsAvailable = false;
+                    ThrowBall(false);
+                }
+            }
+            else
+            {
+                m_FakeActionIsAvailable = true;
             }
         }
     }
@@ -197,7 +226,6 @@ public class Character : Entity
 
         if (!m_IsStun)
         {
-            m_IsStun = true;
             StartCoroutine(Stun(m_Parameters.dashStun));
         }
 
@@ -206,6 +234,7 @@ public class Character : Entity
 
     private IEnumerator Stun(float duration)
     {
+        m_IsStun = true;
         yield return new WaitForSeconds(duration);
         m_IsStun = false;
     }
@@ -241,15 +270,12 @@ public class Character : Entity
     {
         m_Ball = ball;
 
-        // Trail 
-        m_Ball.ClearTrailRenderer();
-        m_Ball.DeactivateTrailRenderer();
-
         StartCoroutine(BallPossession());
-        
+
+        m_Ball.ClearTrailRenderer();
         m_Ball.DeactivateCollider();
 
-        m_PreviousVelocityMagnitude = GetRigidbody().velocity.magnitude;
+        //m_PreviousVelocityMagnitude = GetRigidbody().velocity.magnitude;
 
         m_IsStun = true;
     }
@@ -282,15 +308,22 @@ public class Character : Entity
         m_CharacterUI.possessionBallImage.enabled = false;
     }
 
-    private void ThrowBall()
+    private void ThrowBall(bool isTrueThrow)
     {
         if (m_Ball)
         {
             m_Ball.Throw(GetPosition() + (DirectionToConsider() * m_Parameters.throwOffset), // from 
                 DirectionToConsider() * (m_Parameters.throwForce + (m_PreviousVelocityMagnitude * (1 + (m_Parameters.throwPreviousVelocityPercentage * 0.01f))))); // towards
 
-            m_Ball = null;
-            m_IsStun = false;
+            if (isTrueThrow)
+            {
+                m_Ball = null;
+                StartCoroutine(Stun(m_Parameters.throwStun));
+            }
+            else
+            {
+                m_FakeActionIsEngaged = true;
+            }
         }
     }
 
